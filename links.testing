@@ -1,0 +1,18 @@
+Agent, Country, URL, Expected status, Expected result
+Browser, US, http://localhost:8080/ , 200, No redirect
+Browser, US, http://localhost:8080/uk , 301, http://localhost:8080/uk/
+Googlebot, US, http://localhost:8080/ , 200, No redirect
+Googlebot, US, http://localhost:8080/uk , 301, http://localhost:8080/uk/
+Browser, US, http://localhost:8080/ , 200, No redirect
+Browser, UK, http://localhost:8080/uk , 301, http://localhost:8080/uk/
+Googlebot, UK, http://localhost:8080/ , 200, No redirect
+Googlebot, FR, http://localhost:8080/uk , 301, http://localhost:8080/uk/
+Browser, UK, http://localhost:8080/uk/ , 200, http://localhost:8080/uk/
+Googlebot, FR, http://localhost:8080/uk/ , 200, http://localhost:8080/uk/
+Browser, UK, http://localhost:8080/uk/robots.txt , 404, Not found
+Browser, UK, http://localhost:8080/robots.txt , 200, OK
+Browser, UK, http://localhost:8080/wp-admin/ , 200, OK
+Browser, FR, http://localhost:8080/wp-admin/ , 403, Forbidden
+Browser, US, http://localhost:8080/wp-admin/ , 403, Forbidden
+Browser, DE, http://localhost:8080/test , 200, OK
+Browser, , http://localhost:8080/test , 200, OK

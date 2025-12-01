@@ -1,0 +1,22 @@
+services:
+  htaccess-tester:
+    build: .
+    ports:
+      - "8080:80"
+    volumes:
+      - ./.htaccess:/var/www/html/.htaccess:ro
+      - ./logs:/var/log/apache2
+    environment:
+      - APACHE_RUN_USER=www-data
+      - APACHE_RUN_GROUP=www-data
+    container_name: htaccess-test-server
+    
+  # Optional: Add a simple test runner container
+  test-runner:
+    image: curlimages/curl:latest
+    depends_on:
+      - htaccess-tester
+    volumes:
+      - ./test-scripts:/scripts:ro
+    command: tail -f /dev/null  # Keep container running
+    container_name: htaccess-test-runner

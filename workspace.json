@@ -1,0 +1,33 @@
+{
+  "name": "htaccess-geo-redirection-monorepo",
+  "version": "1.0.0",
+  "description": "Monorepo for .htaccess geo-redirection testing tools and applications",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "make go-build",
+    "test": "make test",
+    "test:all": "make test-all",
+    "test:bash": "make test-bash",
+    "monitor": "make go-run",
+    "docker:up": "cd apps/docker-setup && docker-compose up -d",
+    "docker:down": "cd apps/docker-setup && docker-compose down",
+    "clean": "make clean"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/spagu/htmonitor"
+  },
+  "keywords": [
+    "htaccess",
+    "geo-redirection",
+    "testing",
+    "google-bot",
+    "apache",
+    "monorepo"
+  ],
+  "author": "Tradik Limited",
+  "license": "Commercial"
+}

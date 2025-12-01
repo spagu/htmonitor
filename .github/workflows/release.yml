@@ -1,0 +1,174 @@
+---
+name: Release
+
+'on':
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/htaccess-monitor/**/*.go'
+      - 'apps/htaccess-monitor/go.mod'
+      - 'apps/htaccess-monitor/go.sum'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: apps/htaccess-monitor/go.sum
+          
+      - name: Download dependencies
+        working-directory: apps/htaccess-monitor
+        run: go mod download
+        
+      - name: Get latest tag
+        id: get_tag
+        run: |
+          # Get the latest tag, or use v0.0.0 if no tags exist
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          
+          # Extract version numbers
+          VERSION=${LATEST_TAG#v}
+          MAJOR=$(echo $VERSION | cut -d. -f1)
+          MINOR=$(echo $VERSION | cut -d. -f2)
+          PATCH=$(echo $VERSION | cut -d. -f3)
+          
+          # Increment patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Latest tag: $LATEST_TAG"
+          echo "New version: $NEW_VERSION"
+          
+      - name: Build binaries
+        env:
+          VERSION: ${{ steps.get_tag.outputs.new_version }}
+          BUILD_TIME: ${{ github.event.head_commit.timestamp }}
+        run: |
+          cd apps/htaccess-monitor
+          
+          # Create release directory
+          mkdir -p ../../tools/releases
+          
+          # Build for multiple platforms
+          PLATFORMS=(
+            "linux/amd64"
+            "linux/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+            "freebsd/amd64"
+            "freebsd/arm64"
+          )
+          
+          for PLATFORM in "${PLATFORMS[@]}"; do
+            GOOS=${PLATFORM%/*}
+            GOARCH=${PLATFORM#*/}
+            OUTPUT_NAME="htaccess-monitor-${VERSION}-${GOOS}-${GOARCH}"
+            
+            echo "Building for $GOOS/$GOARCH..."
+            
+            GOOS=$GOOS GOARCH=$GOARCH go build \
+              -ldflags "-X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+              -o "../../tools/releases/${OUTPUT_NAME}" \
+              main.go
+              
+            # Create tar.gz archive
+            cd ../../tools/releases
+            tar -czf "${OUTPUT_NAME}.tar.gz" "${OUTPUT_NAME}"
+            
+            # Create checksum
+            sha256sum "${OUTPUT_NAME}.tar.gz" > "${OUTPUT_NAME}.tar.gz.sha256"
+            
+            # Remove uncompressed binary
+            rm "${OUTPUT_NAME}"
+            
+            cd ../../apps/htaccess-monitor
+          done
+          
+      - name: Generate changelog
+        id: changelog
+        run: |
+          LATEST_TAG="${{ steps.get_tag.outputs.latest_tag }}"
+          
+          # Get commits since last tag
+          if [ "$LATEST_TAG" = "v0.0.0" ]; then
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            COMMITS=$(git log ${LATEST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+          
+          # Create changelog
+          CHANGELOG="## What's Changed
+
+          ${COMMITS}
+
+          ## Binaries
+
+          Download the appropriate binary for your platform:
+
+          ### Linux
+          - **AMD64**: \`htaccess-monitor-${{ steps.get_tag.outputs.new_version }}-linux-amd64.tar.gz\`
+          - **ARM64**: \`htaccess-monitor-${{ steps.get_tag.outputs.new_version }}-linux-arm64.tar.gz\`
+
+          ### macOS
+          - **Intel (AMD64)**: \`htaccess-monitor-${{ steps.get_tag.outputs.new_version }}-darwin-amd64.tar.gz\`
+          - **Apple Silicon (ARM64)**: \`htaccess-monitor-${{ steps.get_tag.outputs.new_version }}-darwin-arm64.tar.gz\`
+
+          ### FreeBSD
+          - **AMD64**: \`htaccess-monitor-${{ steps.get_tag.outputs.new_version }}-freebsd-amd64.tar.gz\`
+          - **ARM64**: \`htaccess-monitor-${{ steps.get_tag.outputs.new_version }}-freebsd-arm64.tar.gz\`
+
+          ## Installation
+
+          \`\`\`bash
+          # Download and extract (example for Linux AMD64)
+          wget https://github.com/${{ github.repository }}/releases/download/${{ steps.get_tag.outputs.new_version }}/htaccess-monitor-${{ steps.get_tag.outputs.new_version }}-linux-amd64.tar.gz
+          tar -xzf htaccess-monitor-${{ steps.get_tag.outputs.new_version }}-linux-amd64.tar.gz
+          chmod +x htaccess-monitor-${{ steps.get_tag.outputs.new_version }}-linux-amd64
+          sudo mv htaccess-monitor-${{ steps.get_tag.outputs.new_version }}-linux-amd64 /usr/local/bin/htaccess-monitor
+          \`\`\`
+
+          ## Verify Checksums
+
+          \`\`\`bash
+          sha256sum -c htaccess-monitor-${{ steps.get_tag.outputs.new_version }}-linux-amd64.tar.gz.sha256
+          \`\`\`
+
+          **Full Changelog**: https://github.com/${{ github.repository }}/compare/${LATEST_TAG}...${{ steps.get_tag.outputs.new_version }}"
+          
+          # Save to file
+          echo "$CHANGELOG" > /tmp/changelog.md
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_tag.outputs.new_version }}
+          name: Release ${{ steps.get_tag.outputs.new_version }}
+          body_path: /tmp/changelog.md
+          draft: false
+          prerelease: false
+          files: |
+            tools/releases/*.tar.gz
+            tools/releases/*.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Update version badge
+        run: |
+          echo "Release ${{ steps.get_tag.outputs.new_version }} created successfully!"
+          echo "Download binaries from: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_tag.outputs.new_version }}"

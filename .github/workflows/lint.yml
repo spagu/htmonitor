@@ -1,0 +1,80 @@
+---
+name: Go Lint
+
+'on':
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/htaccess-monitor/**/*.go'
+      - 'apps/htaccess-monitor/go.mod'
+      - 'apps/htaccess-monitor/go.sum'
+      - '.github/workflows/lint.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/htaccess-monitor/**/*.go'
+      - 'apps/htaccess-monitor/go.mod'
+      - 'apps/htaccess-monitor/go.sum'
+      - '.github/workflows/lint.yml'
+
+jobs:
+  lint:
+    name: Lint Go Code
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: apps/htaccess-monitor/go.sum
+
+      - name: Download dependencies
+        working-directory: apps/htaccess-monitor
+        run: go mod download
+
+      - name: Verify dependencies
+        working-directory: apps/htaccess-monitor
+        run: go mod verify
+
+      - name: Run go vet
+        working-directory: apps/htaccess-monitor
+        run: go vet ./...
+
+      - name: Run go fmt check
+        working-directory: apps/htaccess-monitor
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Go code is not formatted:"
+            gofmt -d .
+            exit 1
+          fi
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
+            | sh -s -- -b $(go env GOPATH)/bin v1.61.0
+
+      - name: Run golangci-lint
+        working-directory: apps/htaccess-monitor
+        run: $(go env GOPATH)/bin/golangci-lint run --timeout=5m
+
+      - name: Run tests
+        working-directory: apps/htaccess-monitor
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic
+
+      - name: Run integration tests
+        working-directory: apps/htaccess-monitor
+        run: go test -v -tags=integration
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./apps/htaccess-monitor/coverage.out
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
