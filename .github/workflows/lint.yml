@@ -24,12 +24,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache-dependency-path: apps/htaccess-monitor/go.sum
 
       - name: Download dependencies
@@ -56,7 +56,7 @@ jobs:
       - name: Install golangci-lint
         run: |
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
-            | sh -s -- -b $(go env GOPATH)/bin v1.61.0
+            | sh -s -- -b $(go env GOPATH)/bin v2.6.2
 
       - name: Run golangci-lint
         working-directory: apps/htaccess-monitor
@@ -71,7 +71,7 @@ jobs:
         run: go test -v -tags=integration
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: ./apps/htaccess-monitor/coverage.out
           flags: unittests
